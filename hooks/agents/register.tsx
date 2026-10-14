@@ -23,6 +23,11 @@ const now = atom({ plugin: 'crewdeck', key: 'now' } as const, 0)
 const spend = atom({ plugin: 'crewdeck', key: 'spend' } as const, 0)
 // Stopped at the budget: kept in the session's state, so a reload (a change in /config) keeps the stop.
 const halt = atom({ plugin: 'crewdeck', key: 'halt' } as const, false)
+// The same for the panel's other totals: the new tokens the agents used, and from the first agent's
+// start to the last one's end. Like the spend, a new plan's clean list never takes them back.
+const spentTokens = atom({ plugin: 'crewdeck', key: 'spentTokens' } as const, 0)
+// `start` -1: no agent yet.
+const span = atom({ plugin: 'crewdeck', key: 'span' } as const, { start: -1, end: 0 })
 // The file tree's git status, lines changed and colors, which an agent's open card draws its files with.
 const GITVIEW = { plugin: 'crewdeck', key: 'gitview' } as const
 const THEME = { plugin: 'crewdeck', key: 'theme' } as const
@@ -107,6 +112,7 @@ const STRINGS = {
     budgetLocal: "(This session only: the setting could not be saved.)",
     budgetPast: "Already past it.",
     budgetNearNow: "Already near it.",
+    budgetReset: "Spending reset: the agents' count starts over at $0.00.",
     budgetOverPause: "Agents reached your {budget} budget ({cost} spent). The session pauses at its next step and asks you.",
     pauseAsk: "Budget reached: agents spent {cost} of {budget}, and the session is paused. Carry on, stop here, or type a new budget (e.g. {example})?",
     pauseHeader: "Budget",
@@ -170,6 +176,7 @@ const STRINGS = {
     budgetLocal: "(Только для этой сессии: настройку не удалось сохранить.)",
     budgetPast: "Он уже превышен.",
     budgetNearNow: "Он уже почти исчерпан.",
+    budgetReset: "Расходы сброшены: счёт агентов начинается заново с $0.00.",
     budgetOverPause: "Агенты исчерпали бюджет {budget} (потрачено {cost}). Сессия встанет на паузу на следующем шаге и спросит вас.",
     pauseAsk: "Бюджет исчерпан: агенты потратили {cost} из {budget}, сессия на паузе. Продолжить, остановиться или ввести новый бюджет (например, {example})?",
     pauseHeader: "Бюджет",
@@ -233,6 +240,7 @@ const STRINGS = {
     budgetLocal: "(לסשן הזה בלבד: לא ניתן היה לשמור את ההגדרה.)",
     budgetPast: "הוא כבר נחצה.",
     budgetNearNow: "הוא כבר קרוב.",
+    budgetReset: "ההוצאות אופסו: הספירה של הסוכנים מתחילה מחדש מ-$0.00.",
     budgetOverPause: "הסוכנים הגיעו לתקציב של {budget} (הוצאו {cost}). הסשן ייעצר בצעד הבא וישאל אתכם.",
     pauseAsk: "התקציב נוצל: הסוכנים הוציאו {cost} מתוך {budget}, והסשן מושהה. להמשיך, לעצור כאן או להקליד תקציב חדש (למשל {example})?",
     pauseHeader: "תקציב",
@@ -1490,8 +1498,28 @@ const spentNow = async ($: EngineInterface): Promise<number> => {
   lastSpent = await read($, spend)
   return lastSpent
 }
-const addSpend = async ($: EngineInterface, usd: number): Promise<void> => {
+const addSpend = async ($: EngineInterface, usd: number, tokens = 0): Promise<void> => {
   if (usd > 0 && Number.isFinite(usd)) await update($, spend, n => n + usd)
+  if (tokens > 0 && Number.isFinite(tokens)) await update($, spentTokens, n => n + tokens)
+}
+const newTokens = (u: Usage): number => (u.input_tokens || 0) + (u.output_tokens || 0) + (u.cache_creation_input_tokens || 0)
+// Everything counted starts over: on /clear (a new chat) and on /crewdeck-budget reset.
+const resetSpend = async ($: EngineInterface): Promise<void> => {
+  lastSpent = 0
+  await update($, spend, () => 0)
+  await update($, spentTokens, () => 0)
+  await update($, span, () => ({ start: -1, end: 0 }))
+  await setHalted($, false)
+}
+// The panel's totals for the session: the agents on the list, and what earlier ones (cleared off it
+// by a new plan) spent before them.
+async function sessionTotals($: EngineInterface, list: AgentRun[], at: number): Promise<{ cost: number; tokens: number; time: number }> {
+  const rows = totals(list, at)
+  const s = await read($, span)
+  const starts = [...list.map(a => a.startedAt), ...(s.start >= 0 ? [s.start] : [])]
+  const ends = [...list.map(a => a.endedAt ?? Math.max(at, a.startedAt)), s.end]
+  const time = starts.length ? Math.max(0, Math.max(...ends) - Math.min(...starts)) : 0
+  return { cost: Math.max(rows.cost, await read($, spend)), tokens: Math.max(rows.tokens, await read($, spentTokens)), time: Math.max(rows.time, time) }
 }
 // The last spend and stop read, for the tool guard's fallback, which may not call $.
 let lastSpent = 0
@@ -1633,8 +1661,8 @@ export const register: Register = (on, options) => {
     }).catch(() => undefined)
     await $.command.register({
       name: 'crewdeck-budget',
-      description: "Set the agents' cost budget in US dollars (/crewdeck-budget 2), raise it to carry on past it (continue), turn it off (off), or see it and what they spent",
-      argumentHint: '[dollars | continue | off]',
+      description: "Set the agents' cost budget in US dollars (/crewdeck-budget 2), raise it to carry on past it (continue), start the spending over (reset), turn it off (off), or see it and what they spent",
+      argumentHint: '[dollars | continue | reset | off]',
       immediate: true,
     }).catch(() => undefined)
     windows = (await $.env.get('OS').catch(() => undefined)) === 'Windows_NT'
@@ -1672,8 +1700,7 @@ export const register: Register = (on, options) => {
     crewIds = new Set()
     crewDone = null
     budgetWarned = budgetUsd > 0 ? 0 : -1
-    await update($, spend, () => 0)
-    await setHalted($, false)
+    await resetSpend($)
     return result
   })
 
@@ -1708,6 +1735,13 @@ export const register: Register = (on, options) => {
           ? `${fill(s.budgetIs, { budget: fmtCost(budgetUsd) })} ${spentLine(budgetUsd)} ${s.budgetHow}`
           : fill(s.budgetNone, { cost }),
       }
+    }
+    // `reset`: the agents' spending starts over at nothing, the budget as it was.
+    if (/^reset$/i.test(arg)) {
+      await resetSpend($)
+      budgetWarned = 0
+      $.ui.invalidate('ui.render')
+      return { text: budgetUsd > 0 ? `${s.budgetReset} ${fill(s.budgetIs, { budget: fmtCost(budgetUsd) })}` : s.budgetReset }
     }
     const off = /^(off|none|clear|no|0+([.,]0+)?)$/i.test(arg)
     // `continue` raises it as the pause's Continue does: half the budget more, from what is spent.
@@ -1842,6 +1876,7 @@ export const register: Register = (on, options) => {
       }
       return [...list.filter(a => a.id !== run.id), run].slice(-200)
     })
+    await update($, span, s => ({ ...s, start: s.start >= 0 ? s.start : at }))
     await update($, now, () => at)
     startCrabs($)
     if (options.autoOpen !== 'off') {
@@ -1885,7 +1920,7 @@ export const register: Register = (on, options) => {
             },
       ),
     )
-    await addSpend($, costOf(model, usage, true))
+    await addSpend($, costOf(model, usage, true), newTokens(usage))
     await checkBudget($)
     return result
   })
@@ -1897,6 +1932,7 @@ export const register: Register = (on, options) => {
       // A run whose steps went unseen is priced from the turn's own sum, and that goes on the spend.
       const run = (await read($, agents)).find(a => a.agentId === agentId)
       const unseen = run && run.steps === 0 && e.usage ? costOf(e.usage.model || run.model || '', e.usage, false) : 0
+      const unseenTokens = run && run.steps === 0 && e.usage ? newTokens(e.usage) : 0
       await update($, agents, list =>
         list.map((a): AgentRun => {
           if (a.agentId !== agentId) return a
@@ -1916,7 +1952,8 @@ export const register: Register = (on, options) => {
           }
         }),
       )
-      await addSpend($, unseen)
+      await addSpend($, unseen, unseenTokens)
+      await update($, span, s => ({ start: s.start >= 0 ? s.start : (run?.startedAt ?? at), end: Math.max(s.end, at) }))
       await update($, now, () => at)
       startCrabs($)
       await checkBudget($)
@@ -1949,8 +1986,7 @@ export const register: Register = (on, options) => {
     const planned = plannedOf(f, list)
     // With a budget, the cost is the session's whole spend, which the budget is held against (a new
     // plan's list drops finished agents, not what they spent).
-    const rows = totals(list, at)
-    const t = budgetUsd > 0 ? { ...rows, cost: Math.max(rows.cost, await read($, spend)) } : rows
+    const t = await sessionTotals($, list, at)
     // The cost, against the budget when one is set: amber near it, red past it.
     const tint = costTint(t.cost)
     const costText = budgetUsd > 0 ? `≈${fmtCost(t.cost)} / ${fmtCost(budgetUsd)}` : `≈${fmtCost(t.cost)}`

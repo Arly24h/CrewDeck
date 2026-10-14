@@ -44,7 +44,7 @@ The mod runs where the Claude Code session runs: your terminal, or the desktop a
 
 Set a budget and Crewdeck holds the agents to it. **When their spending reaches 100% of the budget, the session stops and asks you** before anything else runs. The next step, Claude's or any agent's, waits while Crewdeck asks you what now: **Continue** (the budget goes up by half, at least $1), **Stop here**, or type a new budget under Other. Nothing is lost while it waits, and agents that reach it together share the one question. If you stop, Claude is told to wrap up, and a prompt you type is held back until you raise the budget (`/crewdeck-budget continue` or `/crewdeck-budget 5`). Turn the pause off with **Agents: pause at the budget** in `/config` to keep only the warnings.
 
-The budget is always in US dollars, and the panel's cost reads `≈$1.62 / $2.00`. At 80% of it the cost and the bar above the prompt turn amber, past it red, and a toast says so the first time each happens. The budget counts everything the subagents spend in the session, including agents a new plan clears off the list, and starts over after `/clear`; Claude's own turns are not in it.
+The budget is always in US dollars, and the panel's cost reads `≈$1.62 / $2.00`. At 80% of it the cost and the bar above the prompt turn amber, past it red, and a toast says so the first time each happens. The panel's cost, tokens and time count every subagent of the chat, including the ones already closed and cleared off the list, and so does the budget. They start over only in a new chat (`/clear`) or with `/crewdeck-budget reset`; Claude's own turns are not in them.
 
 Set it from the prompt, even while agents run:
 
@@ -53,6 +53,7 @@ Set it from the prompt, even while agents run:
 | `/crewdeck-budget 2` | a $2.00 budget (`$2`, `2.50`, `2,50` and `2 usd` work too; other currencies are refused) |
 | `/crewdeck-budget continue` | raises it as the pause's Continue does, to carry on past it |
 | `/crewdeck-budget` | shows the budget and how much the agents have spent of it |
+| `/crewdeck-budget reset` | starts the agents' spending over at $0.00, keeping the budget |
 | `/crewdeck-budget off` | no budget |
 
 It is saved as the **Agents: cost budget (USD)** setting, so the next session keeps it; you can change it in `/config` as well.

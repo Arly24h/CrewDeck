@@ -175,6 +175,8 @@ declare module 'claude-code' {
       now: number
       spend: number
       halt: boolean
+      spentTokens: number
+      span: { start: number; end: number }
       tree: FileTree
       theme: Theme
       activity: Activity[]

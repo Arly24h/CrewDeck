@@ -340,3 +340,24 @@ test('tokens: the panel counts what each request adds and writes, not its re-rea
   expect(d).toContain('100k')
   expect(d).not.toContain('1.1M')
 })
+
+test('totals: with no budget too, closed agents a new plan clears stay in the cost, tokens and time, until /crewdeck-budget reset', async ($, on) => {
+  const { clock } = crew(on)
+  await spawn($, 'a1', 'Build the API')
+  await step($, 'a1')
+  await step($, 'a1') // $1.60, 240k
+  await clock.advance(60_000)
+  await finish($, 'a1')
+  await $.tool.call({ tool: 'mcp__crewdeck__progress', title: 'Second run', tasks: [{ title: 'Write the tests' }] } as never)
+  await spawn($, 'a2', 'Write the tests')
+  await step($, 'a2') // $0.80 more
+  const d = await drawn($)
+  expect(d).not.toContain('Build the API')
+  expect(d).toContain('≈$2.40')
+  expect(d).toContain('360k')
+  expect(d).toContain('1:00')
+  expect(await said($, 'reset')).toContain('Spending reset')
+  await step($, 'a2')
+  // From the reset on: only what came after, beside what the cards on the list show.
+  expect(await said($, '')).toContain('Agents have spent ≈$0.80 so far')
+})
