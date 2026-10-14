@@ -18,7 +18,7 @@ In the terminal the agents get just over half the panel and the tree the rest. W
 The two halves are connected:
 
 - A file a subagent reads or writes shimmers in **that agent's tier color** (paler for reads), while Claude's own reads stay purple and writes orange.
-- Each agent's card names the files it is working on: `✎ site.css, app.ts +2` once it has edited something, `◎ notes.md` while it has only read.
+- Each agent's card names the files it is working on: `✎ site.css, app.ts +2` once it has edited something, `◎ notes.md` while it has only read. A read counts however the agent made it: the Read tool, shell readers (`cat`, `head`, `tail`, `rg`, `grep`), PowerShell's `Get-Content` and `Select-String`, and searches that show matching lines; folder listings and searches that only list file names don't. The newest read is listed first.
 - **Click an agent's `▸ 3 changed · 2 read` row** (or, in the terminal, press its number) and the card opens to the files that agent changed, under their folders and drawn the way the file tree draws them: icons, git colors and badges, `+N -N` per file and folder, then a line of what it only read. A file being read or edited right now shimmers there with its pill (`editing`, `reading`) and a tinted row, the same animation as in the tree, and so does the crew view. Click a file there and the tree opens on it.
 - **The ◈ button in the file tree** switches it to the crew view: every file all the agents changed, by folder, with a dot for each agent that touched it in that agent's tier color (two dots on a file two agents both edited). Click a file to go back to the whole tree with it selected; ◈ again also goes back.
 
@@ -132,6 +132,16 @@ At the prompt of a Claude Code session in a terminal:
 ```
 
 Answer `y` to add the marketplace, press Enter for the user scope, and set the options on the screen that follows (or later in `/config`). Crewdeck runs from then on, in the terminal and in the desktop app's local sessions.
+
+### Updating
+
+An installed copy stays as it was installed until you update it. When a new version is out, run this in a terminal and restart Claude Code (or run `/reload-plugins`):
+
+```
+claude plugin update crewdeck@crewdeck
+```
+
+Or turn on auto-update for the `crewdeck` marketplace in `/plugin`, and new versions arrive by themselves.
 
 ### From a folder
 

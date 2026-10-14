@@ -687,6 +687,7 @@ async function settleBackground($: EngineInterface, text: string): Promise<void>
     const results = task.p ? await outcomes($, task.p, ok, undefined) : []
     if (task.p) await finishGit($, task.p, results)
     if (showReads) queuedReads.push(...task.reads.map(r => [r, task.job.readTone ?? 'purple'] as const))
+    await noteReads($, task.job.agentId, task.reads)
     scheduleScan($, { ...task.job, actions: proven(task.p, results) })
   }
 }
@@ -852,6 +853,23 @@ function scheduleScan($: EngineInterface, job: Job): void {
   })().finally(() => {
     scanning = null
   })
+}
+
+// What a subagent read by a shell command or a search that showed the lines, for its card, newest
+// first: only files (a listing's folders are not reads), and only an agent the panel knows.
+async function noteReads($: EngineInterface, agentId: string | undefined, paths: readonly string[]): Promise<void> {
+  if (!agentId || paths.length === 0) return
+  const files: string[] = []
+  for (const p of paths.slice(0, 40)) {
+    try {
+      if ((await $.fs.stat(p)).kind === 'file') files.push(p)
+    } catch {
+      continue
+    }
+  }
+  if (!files.length) return
+  // The first named is the first read, so it ends up lowest.
+  await update($, AGENTS, list => (list ?? []).map(a => (a.agentId === agentId ? { ...a, files: noteFiles(a.files, files, false) } : a)))
 }
 
 // A subagent's reads and writes shimmer in its tier's color (the agents half keeps the runs);
@@ -1297,7 +1315,8 @@ export const register: Register = (on, options) => {
     const command = e.tool === 'Bash' || e.tool === 'PowerShell' ? e.command : ''
     const cwd = shell ? await cwdOf($) : ''
     const actions = gitActions(command)
-    const quiet = !actions.length && readOnly(command)
+    const kind = e.tool === 'PowerShell' ? 'powershell' : 'bash'
+    const quiet = !actions.length && readOnly(command, kind)
     const since = await sinceNow($, shell && !quiet)
     const before = actions.some(a => a.verb === 'commit') ? await get($) : null
     const head = before?.top ? await headOf($, before.root) : ''
@@ -1320,7 +1339,8 @@ export const register: Register = (on, options) => {
     }
     if (shell) {
       const out: Partial<BuiltinToolResults['Bash']> = !result.isError && result.result && typeof result.result === 'object' ? (result.result as Partial<BuiltinToolResults['Bash']>) : {}
-      const reads = showReads ? readTargets(command, cwd, typeof out.stdout === 'string' ? out.stdout : '', home) : []
+      // What the command read: lit in the tree, and on the reading agent's card (whatever the tree shows).
+      const reads = showReads || e.agentId ? readTargets(command, cwd, typeof out.stdout === 'string' ? out.stdout : '', home, kind) : []
       const job: Job = {
         actions: [],
         since,
@@ -1334,7 +1354,8 @@ export const register: Register = (on, options) => {
       else void (async () => {
         const results = pending ? await outcomes($, pending, !result.isError, out.gitOperation) : []
         if (pending) await finishGit($, pending, results)
-        queuedReads.push(...reads.map(r => [r, job.readTone ?? 'purple'] as const))
+        if (showReads) queuedReads.push(...reads.map(r => [r, job.readTone ?? 'purple'] as const))
+        await noteReads($, job.agentId, reads)
         scheduleScan($, { ...job, actions: proven(pending, results) })
       })()
       if (follow && /(^|[;&|\s])(cd|pushd|popd)(\s|$)/.test(command)) $.clock.after(400, () => void followCwd($))
@@ -1356,10 +1377,15 @@ export const register: Register = (on, options) => {
     on('tool.call', { tool }, async ($, e, next) => {
       const result = await next(e)
       if (result.deny || result.isError || !showReads) return result
-      const names = (result.result as Partial<BuiltinToolResults['Grep']> | undefined)?.filenames
+      const found = result.result as Partial<BuiltinToolResults['Grep']> | undefined
+      const names = found?.filenames
       if (!Array.isArray(names) || names.length === 0) return result
       const cwd = await cwdOf($)
-      void touched($, names.slice(0, SEARCH_REVEAL_LIMIT).map(f => resolve(cwd, posix(f), home)), await toneOf($, e.agentId, true), true, true, false)
+      const paths = names.slice(0, SEARCH_REVEAL_LIMIT).map(f => resolve(cwd, posix(f), home))
+      // A Grep that shows the matching lines has read those files: they go on the agent's card.
+      const isRead = e.tool === 'Grep' && found?.mode === 'content'
+      void touched($, paths, await toneOf($, e.agentId, true), true, true, isRead)
+      if (isRead) await noteReads($, e.agentId, paths)
       return result
     })
 

@@ -188,6 +188,14 @@ export const BRANCH_ICON = ICON.branch
 const READERS = new Set(['rg', 'grep', 'egrep', 'fgrep', 'find', 'fd', 'fdfind', 'cat', 'head', 'tail', 'bat', 'less', 'more', 'ls', 'eza', 'tree', 'wc', 'sed', 'awk', 'jq'])
 const PATTERN_FIRST = new Set(['rg', 'grep', 'egrep', 'fgrep', 'sed', 'awk', 'jq'])
 const OUTPUT_PATHS = new Set(['rg', 'grep', 'egrep', 'fgrep', 'find', 'fd', 'fdfind'])
+// PowerShell's own readers (its names are any case, and `cat` and `type` are Get-Content there).
+const PS_READERS = new Set(['get-content', 'gc', 'cat', 'type', 'select-string', 'sls'])
+const PS_PATTERN_FIRST = new Set(['select-string', 'sls'])
+// A PowerShell parameter that takes a value which is not a path.
+const PS_VALUE_FLAG = /^-(totalcount|head|tail|first|last|skip|encoding|delimiter|readcount|pattern|context|include|exclude|filter|stream)$/i
+export type Shell = 'bash' | 'powershell'
+// PowerShell's escape is the backtick: a backslash there is a path's, and (…) only groups.
+const asTyped = (command: string, shell: Shell): string => (shell === 'powershell' ? command.replace(/\\/g, '/').replace(/[()]/g, ' ') : command)
 
 function tidy(path: string): string {
   const s = path.replace(/\/+$/, '')
@@ -210,7 +218,8 @@ export function resolve(cwd: string, p: string, home = ''): string {
 
 const WRITE_FLAGS = /^-(delete|exec|execdir|ok|okdir|fprint\w*|fls|x|X|-exec|-exec-batch)$/
 
-export function readOnly(command: string): boolean {
+export function readOnly(command: string, shell: Shell = 'bash'): boolean {
+  command = asTyped(command, shell)
   const bare = ` ${command}`.replace(/\d*>&\d/g, ' ').replace(/(\d*|&)>>?\s*\/dev\/null/g, ' ')
   if (/[^>]>[^>&]|>>/.test(bare)) return false
   return segments(command).every(raw => {
@@ -223,28 +232,38 @@ export function readOnly(command: string): boolean {
     }
     if (head === 'sed') return !tokens.some(t => /^-i/.test(t))
     if (head === 'find' || head === 'fd' || head === 'fdfind') return !tokens.some(t => WRITE_FLAGS.test(t))
-    return READERS.has(head)
+    return READERS.has(head) || (shell === 'powershell' && PS_READERS.has(head.toLowerCase()))
   })
 }
 
-export function readTargets(command: string, sessionCwd: string, stdout: string, home = ''): string[] {
+export function readTargets(command: string, sessionCwd: string, stdout: string, home = '', shell: Shell = 'bash'): string[] {
+  command = asTyped(command, shell)
   let cwd = sessionCwd
   const out = new Set<string>()
   let listsPaths = false
   for (const raw of segments(command)) {
     const tokens = stripGlobals(raw).map(t => posix(t.replace(/^["']|["']$/g, '')))
+    // PowerShell: `$text = Get-Content a.md` reads a.md too.
+    if (shell === 'powershell' && /^\$\w+$/.test(tokens[0] ?? '') && tokens[1] === '=') tokens.splice(0, 2)
     const head = tokens[0]?.split('/').pop() ?? ''
     if (head === 'cd' && tokens[1]) {
       cwd = resolve(cwd, tokens[1], home)
       continue
     }
-    if (!READERS.has(head)) continue
+    const ps = shell === 'powershell' && PS_READERS.has(head.toLowerCase())
+    if (!READERS.has(head) && !ps) continue
     if (head === 'sed' && tokens.some(t => /^-i/.test(t))) continue
-    if (OUTPUT_PATHS.has(head)) listsPaths = true
+    if (OUTPUT_PATHS.has(head) || (ps && PS_PATTERN_FIRST.has(head.toLowerCase()))) listsPaths = true
     const args = tokens.slice(1)
-    let skipPattern = PATTERN_FIRST.has(head) && !args.some(t => t === '-e' || t === '-f' || t === '--files')
+    let skipPattern = ps
+      ? PS_PATTERN_FIRST.has(head.toLowerCase()) && !args.some(t => /^-pattern$/i.test(t))
+      : PATTERN_FIRST.has(head) && !args.some(t => t === '-e' || t === '-f' || t === '--files')
     for (let i = 0; i < args.length; i++) {
       const a = args[i] ?? ''
+      if (ps && a.startsWith('-')) {
+        if (PS_VALUE_FLAG.test(a)) i++
+        continue
+      }
       if (a.startsWith('-')) {
         if (/^-(e|f|g|t|T|m|A|B|C|-glob|-type|-max-count|name|iname|maxdepth|mindepth)$/.test(a)) i++
         continue
