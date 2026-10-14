@@ -10,7 +10,8 @@ A deck for watching Claude work. Crewdeck is a Claude Code **mod** (built and te
 - **The agents, on top**: every subagent, running, finished or planned, with its model, step progress, context, tokens, cost and time. Each one has a pixel crab dressed for the job it is doing.
 - **The file tree, underneath**: the project with git status, lines changed, branch and ahead/behind, and a shimmer on the files being read, written or committed.
 - **A progress bar above the prompt** while agents run (`Agents · Tasks 1/3`), with a small crab: claws up while they work.
-- **A summary when the crew is done, and a cost budget** that warns you near it and pauses the session at it until you say go on, both also as a system notification (see [Cost budget and notifications](#cost-budget-and-notifications)).
+- **A cost budget that stops at 100%.** Give the agents a budget (`/crewdeck-budget 5`) and when their spending reaches it, the session pauses before the next step and asks you: **Stop here**, **Continue** with the budget raised, or type a new one. Nothing more runs or gets spent until you answer. At 80% it warns you first (see [Cost budget: a hard stop at 100%](#cost-budget-a-hard-stop-at-100)).
+- **A summary when the crew is done**, also as a system notification (see [Crew summary and notifications](#crew-summary-and-notifications)).
 
 In the terminal the agents get just over half the panel and the tree the rest. While agents run they get more of the panel, enough for three cards at once, and the tree keeps at least ten rows. When there are more cards than fit, `▲ N agents` and `▼ N agents` buttons move through them. Without agents the tree gets nearly the whole panel. The desktop app scrolls the panel as one page.
 
@@ -39,13 +40,11 @@ Both halves work the same in the CLI and in the desktop app's own sessions. Foll
 
 The mod runs where the Claude Code session runs: your terminal, or the desktop app's own sessions. It doesn't run in a claude.ai chat or on the phone.
 
-## Cost budget and notifications
+## Cost budget: a hard stop at 100%
 
-When the last agent of a crew finishes, a toast and a green line at the top of the panel sum it up: `✓ Crew done · 3 agents · ≈$0.42 · 2:14 · 7 files changed` (and how many failed, if any). The line stays until the next agent starts.
+Set a budget and Crewdeck holds the agents to it. **When their spending reaches 100% of the budget, the session stops and asks you** before anything else runs. The next step, Claude's or any agent's, waits while Crewdeck asks you what now: **Continue** (the budget goes up by half, at least $1), **Stop here**, or type a new budget under Other. Nothing is lost while it waits, and agents that reach it together share the one question. If you stop, Claude is told to wrap up, and a prompt you type is held back until you raise the budget (`/crewdeck-budget continue` or `/crewdeck-budget 5`). Turn the pause off with **Agents: pause at the budget** in `/config` to keep only the warnings.
 
-With a **cost budget**, always in US dollars, the panel's cost reads `≈$1.62 / $2.00`. At 80% of it the cost and the bar above the prompt turn amber, past it red, and a toast says so the first time each happens. The budget counts everything the subagents spend in the session, including agents a new plan clears off the list, and starts over after `/clear`; Claude's own turns are not in it.
-
-**At the budget the session pauses.** The next step, Claude's or any agent's, waits while Crewdeck asks you what now: **Continue** (the budget goes up by half, at least $1), **Stop here**, or type a new budget under Other. Nothing is lost while it waits, and agents that reach it together share the one question. If you stop, Claude is told to wrap up, and a prompt you type is held back until you raise the budget (`/crewdeck-budget continue` or `/crewdeck-budget 5`). Turn the pause off with **Agents: pause at the budget** in `/config` to keep only the warnings.
+The budget is always in US dollars, and the panel's cost reads `≈$1.62 / $2.00`. At 80% of it the cost and the bar above the prompt turn amber, past it red, and a toast says so the first time each happens. The budget counts everything the subagents spend in the session, including agents a new plan clears off the list, and starts over after `/clear`; Claude's own turns are not in it.
 
 Set it from the prompt, even while agents run:
 
@@ -57,6 +56,10 @@ Set it from the prompt, even while agents run:
 | `/crewdeck-budget off` | no budget |
 
 It is saved as the **Agents: cost budget (USD)** setting, so the next session keeps it; you can change it in `/config` as well.
+
+## Crew summary and notifications
+
+When the last agent of a crew finishes, a toast and a green line at the top of the panel sum it up: `✓ Crew done · 3 agents · ≈$0.42 · 2:14 · 7 files changed` (and how many failed, if any). The line stays until the next agent starts.
 
 Those moments (the crew done, the budget at 80% and past it) also come as a **system notification**, so you hear about them from another window: on Windows a Windows notification in the bottom right corner with its sound (sent through Windows PowerShell, so it is signed "Windows PowerShell"); on macOS and Linux through your terminal's notifications (iTerm2, kitty, Ghostty) or its bell. Turn it off with **Agents: system notifications** in `/config`; the toasts inside Claude Code stay.
 
