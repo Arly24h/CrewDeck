@@ -18,6 +18,11 @@ const panel = atom({ plugin: 'crewdeck', key: 'panel' } as const, {
   autoOpenedFor: '',
 })
 const now = atom({ plugin: 'crewdeck', key: 'now' } as const, 0)
+// What the session's subagents have spent, in dollars: only ever added to (a new plan's clean list, the
+// 200-row cap and a reload all leave it), and started over by /clear. The budget is held against it.
+const spend = atom({ plugin: 'crewdeck', key: 'spend' } as const, 0)
+// Stopped at the budget: kept in the session's state, so a reload (a change in /config) keeps the stop.
+const halt = atom({ plugin: 'crewdeck', key: 'halt' } as const, false)
 // The file tree's git status, lines changed and colors, which an agent's open card draws its files with.
 const GITVIEW = { plugin: 'crewdeck', key: 'gitview' } as const
 const THEME = { plugin: 'crewdeck', key: 'theme' } as const
@@ -85,6 +90,7 @@ const STRINGS = {
     keysIdle: 'ctrl+x tab: use the keyboard here',
     keysFocused: '1-9 files · tab/↑↓ next · PgUp PgDn scroll · esc back',
     crewDone: 'Crew done',
+    stoppedEarly: "stopped early",
     idleTitle: "No agents running",
     idleHint: "They'll show up here when Claude starts one.",
     agentOne: 'agent',
@@ -101,6 +107,15 @@ const STRINGS = {
     budgetLocal: "(This session only: the setting could not be saved.)",
     budgetPast: "Already past it.",
     budgetNearNow: "Already near it.",
+    budgetOverPause: "Agents reached your {budget} budget ({cost} spent). The session pauses at its next step and asks you.",
+    pauseAsk: "Budget reached: agents spent {cost} of {budget}, and the session is paused. Carry on, stop here, or type a new budget (e.g. {example})?",
+    pauseHeader: "Budget",
+    pauseGo: "Continue (+{more})",
+    pauseStop: "Stop here",
+    pauseRetry: "\"{arg}\" isn't a dollar amount above what's spent ({cost}).",
+    pauseOnward: "Budget raised to {budget}: carrying on.",
+    pauseHalted: "Stopped at the {budget} budget. To carry on, raise it: /crewdeck-budget continue or /crewdeck-budget 5.",
+    pauseDrop: "The session is paused at its {budget} budget ({cost} spent). Raise it to go on: /crewdeck-budget continue (+{more}) or /crewdeck-budget 5.",
     done: 'Done',
     plan: 'Plan',
     design: 'Design',
@@ -138,6 +153,7 @@ const STRINGS = {
     keysIdle: 'ctrl+x tab: управление с клавиатуры',
     keysFocused: '1-9 файлы · tab/↑↓ далее · PgUp PgDn прокрутка · esc назад',
     crewDone: 'Команда закончила',
+    stoppedEarly: "остановлен раньше",
     idleTitle: "Агенты не запущены",
     idleHint: "Они появятся здесь, когда Claude запустит агента.",
     agentOne: 'агент',
@@ -154,6 +170,15 @@ const STRINGS = {
     budgetLocal: "(Только для этой сессии: настройку не удалось сохранить.)",
     budgetPast: "Он уже превышен.",
     budgetNearNow: "Он уже почти исчерпан.",
+    budgetOverPause: "Агенты исчерпали бюджет {budget} (потрачено {cost}). Сессия встанет на паузу на следующем шаге и спросит вас.",
+    pauseAsk: "Бюджет исчерпан: агенты потратили {cost} из {budget}, сессия на паузе. Продолжить, остановиться или ввести новый бюджет (например, {example})?",
+    pauseHeader: "Бюджет",
+    pauseGo: "Продолжить (+{more})",
+    pauseStop: "Остановиться",
+    pauseRetry: "«{arg}» — не сумма в долларах больше потраченного ({cost}).",
+    pauseOnward: "Бюджет поднят до {budget}: продолжаем.",
+    pauseHalted: "Остановлено на бюджете {budget}. Чтобы продолжить, поднимите его: /crewdeck-budget continue или /crewdeck-budget 5.",
+    pauseDrop: "Сессия на паузе: бюджет {budget} исчерпан (потрачено {cost}). Чтобы продолжить, поднимите его: /crewdeck-budget continue (+{more}) или /crewdeck-budget 5.",
     done: 'Готово',
     plan: 'План',
     design: 'Дизайн',
@@ -191,6 +216,7 @@ const STRINGS = {
     keysIdle: 'ctrl+x tab: שליטה במקלדת',
     keysFocused: '1-9 קבצים · tab/↑↓ הבא · PgUp PgDn גלילה · esc חזרה',
     crewDone: 'הצוות סיים',
+    stoppedEarly: "נעצר מוקדם",
     idleTitle: "אין סוכנים פעילים",
     idleHint: "הם יופיעו כאן כש-Claude יפעיל סוכן.",
     agentOne: 'סוכן',
@@ -207,6 +233,15 @@ const STRINGS = {
     budgetLocal: "(לסשן הזה בלבד: לא ניתן היה לשמור את ההגדרה.)",
     budgetPast: "הוא כבר נחצה.",
     budgetNearNow: "הוא כבר קרוב.",
+    budgetOverPause: "הסוכנים הגיעו לתקציב של {budget} (הוצאו {cost}). הסשן ייעצר בצעד הבא וישאל אתכם.",
+    pauseAsk: "התקציב נוצל: הסוכנים הוציאו {cost} מתוך {budget}, והסשן מושהה. להמשיך, לעצור כאן או להקליד תקציב חדש (למשל {example})?",
+    pauseHeader: "תקציב",
+    pauseGo: "להמשיך (+{more})",
+    pauseStop: "לעצור כאן",
+    pauseRetry: "\"{arg}\" אינו סכום בדולרים גבוה ממה שהוצא ({cost}).",
+    pauseOnward: "התקציב הועלה ל-{budget}: ממשיכים.",
+    pauseHalted: "נעצר בתקציב של {budget}. כדי להמשיך, העלו אותו: /crewdeck-budget continue או /crewdeck-budget 5.",
+    pauseDrop: "הסשן מושהה בתקציב של {budget} (הוצאו {cost}). כדי להמשיך, העלו אותו: /crewdeck-budget continue (+{more}) או /crewdeck-budget 5.",
     done: 'הושלם',
     plan: 'תכנון',
     design: 'עיצוב',
@@ -734,6 +769,8 @@ const crab = (x: number, y: number, costume: string, dim = false, isWalking = fa
 const statusMark = (x: number, y: number, status: string, color: string): string => {
   if (status === 'running') return `<circle class="live" cx="${x}" cy="${y}" r="3.5" fill="${color}"/>`
   if (status === 'done') return `<path d="M${x - 5} ${y}l3.5 3.5 6.5-7" fill="none" stroke="#3B9C5F" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>`
+  if (status === 'partial')
+    return `<circle cx="${x}" cy="${y}" r="5.5" fill="none" stroke="${NEAR}" stroke-width="1.5"/><path d="M${x} ${y - 3}v3.4" stroke="${NEAR}" stroke-width="1.6" stroke-linecap="round"/><circle cx="${x}" cy="${y + 2.8}" r="0.9" fill="${NEAR}"/>`
   if (status === 'failed') return `<path d="M${x - 4} ${y - 4}l8 8M${x + 4} ${y - 4}l-8 8" stroke="#D0453F" stroke-width="1.8" stroke-linecap="round"/>`
   return `<circle cx="${x}" cy="${y}" r="5" fill="none" stroke="#9a9a96" stroke-width="1.4"/><path d="M${x} ${y - 2.5}v2.8l1.8 1.2" fill="none" stroke="#9a9a96" stroke-width="1.4" stroke-linecap="round"/>`
 }
@@ -756,6 +793,8 @@ const ACCENT_BIAS = 2.4
 const DEFAULT_CELL = 0x01000000
 // The pane must be at least this many columns wide for a crab to sit beside an agent's text.
 const CRAB_MIN_COLUMNS = 64
+// The rows the deck's file tree keeps however many agents there are.
+const TREE_MIN_ROWS = 10
 
 type Px = readonly [r: number, g: number, b: number]
 
@@ -919,12 +958,12 @@ const crabGrid = (costume: string, pose = -1): (Px | null)[] => {
 const CLAY_PX = parseColor(CLAY).px
 
 // The grid shrunk to SPRITE_W × SPRITE_PX: each pixel takes the color that covers most of its square.
-const shrinkGrid = (grid: (Px | null)[]): (Px | null)[] => {
-  const sx = CRAB_BOX / SPRITE_W
-  const sy = CRAB_ROWS / SPRITE_PX
+const shrinkGrid = (grid: (Px | null)[], W = SPRITE_W, PH = SPRITE_PX): (Px | null)[] => {
+  const sx = CRAB_BOX / W
+  const sy = CRAB_ROWS / PH
   const out: (Px | null)[] = []
-  for (let oy = 0; oy < SPRITE_PX; oy++) {
-    for (let ox = 0; ox < SPRITE_W; ox++) {
+  for (let oy = 0; oy < PH; oy++) {
+    for (let ox = 0; ox < W; ox++) {
       const x0 = ox * sx
       const y0 = oy * sy
       const seen = new Map<string, { px: Px; w: number }>()
@@ -1008,7 +1047,7 @@ let crabMotion = true
 const poseOf = (a: AgentRun, i: number, at: number): number => {
   if (!crabMotion) return -1
   if (a.status === 'running') return (crabTick + 2 * i) % CRAB_FRAMES
-  if (a.status === 'done' && a.endedAt !== undefined && at - a.endedAt < CHEER_MS) return 10 + ((crabTick + 2 * i) % CRAB_FRAMES)
+  if (cheers(a, at)) return 10 + ((crabTick + 2 * i) % CRAB_FRAMES)
   return -1
 }
 
@@ -1017,12 +1056,12 @@ const poseOf = (a: AgentRun, i: number, at: number): number => {
 const CLAY_LIT: Px = [238, 150, 118]
 const CLAY_SHADE: Px = [178, 88, 60]
 const INK_PX = parseColor(INK).px
-const shade = (px: (Px | null)[]): (Px | null)[] => {
+const shade = (px: (Px | null)[], W = SPRITE_W, PH = SPRITE_PX): (Px | null)[] => {
   const same = (a: Px | null | undefined, b: Px): boolean => !!a && a[0] === b[0] && a[1] === b[1] && a[2] === b[2]
-  const at = (x: number, y: number): Px | null => (x < 0 || y < 0 || x >= SPRITE_W || y >= SPRITE_PX ? null : (px[y * SPRITE_W + x] ?? null))
+  const at = (x: number, y: number): Px | null => (x < 0 || y < 0 || x >= W || y >= PH ? null : (px[y * W + x] ?? null))
   return px.map((p, i) => {
-    const x = i % SPRITE_W
-    const y = Math.floor(i / SPRITE_W)
+    const x = i % W
+    const y = Math.floor(i / W)
     if (same(p, CLAY_PX)) {
       if (!at(x, y + 1)) return CLAY_SHADE
       if (!at(x, y - 1)) return CLAY_LIT
@@ -1163,9 +1202,15 @@ ${tile(0, s.cost, '≈' + fmtCost(t.cost))}${tile(1, s.tokens, fmtTokens(t.token
 
 const headerHeight = (title: string): number => (title ? 72 : 44)
 
-// The task's own progress when the worker reports steps; a finished run is full.
+// An agent that ended without failing but before the last of the steps it reported: done, not
+// finished. Its card says so (an amber `!`, "stopped early") and its crab does not cheer.
+const isPartial = (a: AgentRun): boolean => a.status === 'done' && Boolean(a.stepTotal) && (a.stepDone ?? 0) < (a.stepTotal ?? 0)
+const markOf = (a: AgentRun): string => (isPartial(a) ? 'partial' : a.status)
+const cheers = (a: AgentRun, at: number): boolean => a.status === 'done' && !isPartial(a) && a.endedAt !== undefined && at - a.endedAt < CHEER_MS
+
+// The task's own progress when the worker reports steps; a finished run is full, one that stopped early as far as it got.
 const progressOf = (a: AgentRun): number | null => {
-  if (a.status === 'done') return 1
+  if (a.status === 'done' && !isPartial(a)) return 1
   if (a.stepTotal) return Math.min(1, (a.stepDone ?? 0) / a.stepTotal)
   return null
 }
@@ -1189,20 +1234,20 @@ const agentSvg = (W: number, a: AgentRun, at: number, clock = at): string => {
   const barW = textW
   const progress = progressOf(a)
   const stats = `${s.ctx} ${ctx}% · ${fmtTokens(a.contextTokens)}  ≈${fmtCost(a.costUsd)}  ${fmtTime(elapsed(a, at))}`
-  const steps = a.stepTotal ? `${a.stepDone ?? 0}/${a.stepTotal}${a.stepNote ? ' · ' + a.stepNote : ''}` : ''
+  const steps = a.stepTotal ? `${a.stepDone ?? 0}/${a.stepTotal}${a.stepNote ? ' · ' + a.stepNote : ''}${isPartial(a) ? ` · ${s.stoppedEarly}` : ''}` : ''
   const stepsW = Math.max(0, barW - textWidth(stats, 11) - 12)
   // Without reported steps the bar falls back to the context, drawn grey.
   const fillW = Math.round(barW * (progress ?? ctx / 100))
   return svg(
     W,
     66,
-    `${rowCrab(W, 0, 9, costumeFor(a), false, a.status === 'running', a.status === 'done' && a.endedAt !== undefined && clock - a.endedAt < CHEER_MS, ROW_CRAB_SCALE, staggerOf(a.id))}
+    `${rowCrab(W, 0, 9, costumeFor(a), false, a.status === 'running', cheers(a, clock), ROW_CRAB_SCALE, staggerOf(a.id))}
 <text class="t" ${startText(W, ROW_TEXT_X, 18)} font-family="${FONT}" font-size="13" font-weight="600">${xml(fitText(a.description || a.type, 13, textW))}</text>
 <text ${startText(W, ROW_TEXT_X, 34)} font-family="${FONT}" font-size="11"><tspan fill="${color}">${xml(tier === 'other' ? a.type : tierWord(tier))}</tspan><tspan class="s">  ${xml(fitText(meta.join('  ·  '), 11, metaW))}</tspan></text>
 ${steps && stepsW > 30 ? `<text class="t" ${startText(W, ROW_TEXT_X, 49)} font-family="${FONT}" font-size="11" font-variant-numeric="tabular-nums">${xml(fitText(steps, 11, stepsW))}</text>` : ''}
 <text class="s" ${endText(W, ROW_TEXT_X + barW, 49, true)} font-family="${FONT}" font-size="11" font-variant-numeric="tabular-nums">${stats}</text>
 <rect class="k" x="${mx(W, ROW_TEXT_X, barW)}" y="55" width="${barW}" height="4" rx="2"/><rect${progress === null ? ' class="m"' : ''} x="${mx(W, ROW_TEXT_X, fillW)}" y="55" width="${fillW}" height="4" rx="2"${progress === null ? '' : ` fill="${color}"`}/>
-${statusMark(mx(W, W - 8), 16, a.status, color)}
+${statusMark(mx(W, W - 8), 16, markOf(a), color)}
 <line class="ln" x1="0" y1="65.5" x2="${W}" y2="65.5"/>`,
   )
 }
@@ -1252,7 +1297,7 @@ const ctxBar = (pct: number, width: number): string => {
   return '█'.repeat(filled) + '░'.repeat(Math.max(0, width - filled))
 }
 
-const STATUS_GLYPH: Record<string, string> = { running: '●', done: '✓', failed: '✗', planned: '◷' }
+const STATUS_GLYPH: Record<string, string> = { running: '●', done: '✓', partial: '!', failed: '✗', planned: '◷' }
 
 // Opens the agents pane, or closes it when it is up; true when it ends up open.
 // Opens or closes an agent's list of files. Opened from the keyboard, the list is then brought
@@ -1365,7 +1410,7 @@ let appPictures = true
 
 // The crew: the agents started since none was running. When its last one ends it gets a summary
 // (a toast, and a line in the panel until the next agent starts or /clear).
-type CrewSummary = { agents: number; failed: number; cost: number; time: number; files: number }
+type CrewSummary = { agents: number; failed: number; stopped: number; cost: number; time: number; files: number }
 let crewIds = new Set<string>()
 let crewDone: CrewSummary | null = null
 
@@ -1373,7 +1418,7 @@ const summarize = (runs: AgentRun[]): CrewSummary => {
   const files = new Set(runs.flatMap(a => (a.files ?? []).filter(f => f.isEdit).map(f => f.path)))
   const start = Math.min(...runs.map(a => a.startedAt))
   const end = Math.max(...runs.map(a => a.endedAt ?? a.startedAt))
-  return { agents: runs.length, failed: runs.filter(a => a.status === 'failed').length, cost: runs.reduce((n, a) => n + a.costUsd, 0), time: Math.max(0, end - start), files: files.size }
+  return { agents: runs.length, failed: runs.filter(a => a.status === 'failed').length, stopped: runs.filter(isPartial).length, cost: runs.reduce((n, a) => n + a.costUsd, 0), time: Math.max(0, end - start), files: files.size }
 }
 
 const crewLine = (c: CrewSummary): string => {
@@ -1384,6 +1429,7 @@ const crewLine = (c: CrewSummary): string => {
     `≈${fmtCost(c.cost)}`,
     fmtTime(c.time),
     `${c.files} ${s.filesChanged}`,
+    ...(c.stopped ? [`${c.stopped} ${s.stoppedEarly}`] : []),
     ...(c.failed ? [`${c.failed} ${s.failed}`] : []),
   ].join(' · ')
 }
@@ -1439,9 +1485,113 @@ async function notifySystem($: EngineInterface, text: string): Promise<void> {
   await $.ui.notify(text, { title: 'Crewdeck' }).catch(() => undefined)
 }
 
+const fill = (text: string, v: Record<string, string>): string => text.replace(/\{(\w+)\}/g, (m, k: string) => v[k] ?? m)
+const spentNow = async ($: EngineInterface): Promise<number> => {
+  lastSpent = await read($, spend)
+  return lastSpent
+}
+const addSpend = async ($: EngineInterface, usd: number): Promise<void> => {
+  if (usd > 0 && Number.isFinite(usd)) await update($, spend, n => n + usd)
+}
+// The last spend and stop read, for the tool guard's fallback, which may not call $.
+let lastSpent = 0
+let halted = false
+const isHalted = async ($: EngineInterface): Promise<boolean> => (halted = await read($, halt))
+const setHalted = async ($: EngineInterface, v: boolean): Promise<void> => {
+  halted = v
+  await update($, halt, () => v)
+}
+
+// At the budget the session pauses: the next tool call (the main session's or any agent's) waits
+// while the person is asked to carry on, stop, or type another budget. Stopped, every tool call is
+// refused and a typed prompt is held back until the budget is raised (/crewdeck-budget).
+let pauseOn = true
+let pausing: Promise<boolean> | null = null
+const cents = (n: number): number => Math.round(n * 100) / 100
+// What "continue" adds: half the budget, at least a dollar ($2 → +$1, $10 → +$5).
+const raisedFrom = (spent: number): number => cents(Math.max(budgetUsd, spent) + Math.max(1, Math.ceil(budgetUsd / 2)))
+const isOverBudget = async ($: EngineInterface): Promise<boolean> => pauseOn && budgetUsd > 0 && ((await isHalted($)) || (await spentNow($)) >= budgetUsd)
+// The same, from what was last read: the fallback's answer when the guard itself failed.
+const wasOverBudget = (): boolean => pauseOn && budgetUsd > 0 && (halted || lastSpent >= budgetUsd)
+const HALT_NOTE = (budget: string) =>
+  `Crewdeck: the person stopped this session at its cost budget (${budget}). Don't call more tools: end your turn now with a short note of what is done and what is left.`
+
+// The budget as the person set it, for the rest of the session; a raise past the spending lifts a stop.
+async function applyBudget($: EngineInterface, dollars: number): Promise<void> {
+  budgetUsd = dollars
+  budgetWarned = budgetLevel(await spentNow($))
+  if (budgetWarned < 2) await setHalted($, false)
+  $.ui.invalidate('ui.render')
+}
+// Kept as the setting when it can be, so the next session has it too. Saving it reloads the module (its
+// options changed), so the pause saves last, once its answer is given.
+async function saveBudget($: EngineInterface, dollars: number): Promise<boolean> {
+  try {
+    const row = (await $.config.list()).find(r => /^crewdeck(@[\w.-]+)?\.budget$/.test(r.key))
+    return row ? !(await $.config.set({ key: row.key, value: dollars ? String(dollars) : '' })).deny : false
+  } catch {
+    return false
+  }
+}
+
+// The question, until it has an answer: the budget to carry on with (0: none), or null to stop.
+async function askAtBudget($: EngineInterface): Promise<number | null> {
+  const s = tr()
+  let note = ''
+  for (;;) {
+    const spent = await spentNow($)
+    if (budgetUsd <= 0 || spent < budgetUsd) return budgetUsd
+    const raised = raisedFrom(spent)
+    const go = fill(s.pauseGo, { more: fmtCost(raised - budgetUsd) })
+    const cost = `≈${fmtCost(spent)}`
+    const question = note + fill(s.pauseAsk, { cost, budget: fmtCost(budgetUsd), example: String(Math.ceil(raised * 2)) })
+    let answer: string
+    try {
+      answer = (await $.ui.ask(question, { options: [go, s.pauseStop], header: s.pauseHeader })).trim()
+    } catch {
+      // Dismissed, or no one to ask (-p): it stops, as the budget says.
+      return null
+    }
+    if (answer === go) return raised
+    if (answer === s.pauseStop) return null
+    if (/^(off|none|no budget)$/i.test(answer)) return 0
+    const typed = readDollars(answer)
+    if (typed !== null && typed > spent) return typed
+    note = `${fill(s.pauseRetry, { arg: answer, cost })} `
+  }
+}
+
+// One question for every call that reaches the budget at once: the first asks, the rest wait for it.
+// A wait of the hook's own counts against its budget, so the others wait on a short process each turn
+// (one in flight costs the hook nothing).
+const nap = ($: EngineInterface): Promise<unknown> =>
+  $.process.run(windows ? ['ping', '-n', '2', '127.0.0.1'] : ['sleep', '1'], { timeoutMs: 5_000 }).catch(() => $.clock.sleep(250))
+async function holdAtBudget($: EngineInterface, signal?: AbortSignal): Promise<boolean> {
+  if (pausing) {
+    while (pausing && !signal?.aborted) await nap($)
+    // A wait given up (the person interrupted) runs nothing.
+    return !signal?.aborted && !(await isHalted($))
+  }
+  const s = tr()
+  let answered: (go: boolean) => void = () => undefined
+  pausing = new Promise<boolean>(r => (answered = r))
+  let dollars: number | null = null
+  try {
+    dollars = await askAtBudget($)
+    if (dollars === null) await setHalted($, true)
+    else await applyBudget($, dollars)
+  } finally {
+    pausing = null
+    answered(dollars !== null)
+  }
+  $.ui.toast(dollars !== null ? fill(s.pauseOnward, { budget: fmtCost(budgetUsd) }) : fill(s.pauseHalted, { budget: fmtCost(budgetUsd) }))
+  if (dollars !== null && !signal?.aborted) void saveBudget($, dollars)
+  return dollars !== null && !signal?.aborted
+}
+
 async function checkBudget($: EngineInterface): Promise<void> {
   if (budgetUsd <= 0) return
-  const cost = (await read($, agents)).reduce((n, a) => n + a.costUsd, 0)
+  const cost = await spentNow($)
   const level = budgetLevel(cost)
   if (budgetWarned < 0) {
     budgetWarned = level
@@ -1450,7 +1600,7 @@ async function checkBudget($: EngineInterface): Promise<void> {
   if (level <= budgetWarned) return
   budgetWarned = level
   const s = tr()
-  const text = (level === 2 ? s.budgetOver : s.budgetNear).replace('{cost}', `≈${fmtCost(cost)}`).replace('{budget}', fmtCost(budgetUsd))
+  const text = (level === 2 ? (pauseOn ? s.budgetOverPause : s.budgetOver) : s.budgetNear).replace('{cost}', `≈${fmtCost(cost)}`).replace('{budget}', fmtCost(budgetUsd))
   $.ui.toast(text)
   await notifySystem($, text)
 }
@@ -1471,6 +1621,7 @@ export const register: Register = (on, options) => {
   crabMotion = options?.crabMotion !== 'off'
   budgetUsd = parseBudget(options?.budget)
   notifyOn = options?.notify !== 'off'
+  pauseOn = options?.budgetPause !== 'off'
   appPictures = options?.appRows !== 'classic'
   on('session.start', async ($, e, next) => {
     const started = await next(e)
@@ -1482,8 +1633,8 @@ export const register: Register = (on, options) => {
     }).catch(() => undefined)
     await $.command.register({
       name: 'crewdeck-budget',
-      description: "Set the agents' cost budget in US dollars (/crewdeck-budget 2), turn it off (off), or see it and what they spent",
-      argumentHint: '[dollars | off]',
+      description: "Set the agents' cost budget in US dollars (/crewdeck-budget 2), raise it to carry on past it (continue), turn it off (off), or see it and what they spent",
+      argumentHint: '[dollars | continue | off]',
       immediate: true,
     }).catch(() => undefined)
     windows = (await $.env.get('OS').catch(() => undefined)) === 'Windows_NT'
@@ -1521,18 +1672,37 @@ export const register: Register = (on, options) => {
     crewIds = new Set()
     crewDone = null
     budgetWarned = budgetUsd > 0 ? 0 : -1
+    await update($, spend, () => 0)
+    await setHalted($, false)
     return result
+  })
+
+  // At the budget, every tool call waits for the person's answer (see holdAtBudget); registered
+  // before the other tool hooks, so a held call has done nothing yet. The panel's own report tools
+  // cost nothing and go on.
+  on('tool.call', async ($, e, next) => {
+    if (e.tool === TOOL || e.tool === STEP_TOOL || !(await isOverBudget($))) return next(e)
+    // Stopped: refused straight away, without another question.
+    if (halted && !pausing) return { deny: HALT_NOTE(fmtCost(budgetUsd)) }
+    return (await holdAtBudget($, next.signal)) ? next(e) : { deny: HALT_NOTE(fmtCost(budgetUsd)) }
+  }).catch(($, e, next) => (next.called ? next(e) : e.tool !== TOOL && e.tool !== STEP_TOOL && (pausing || wasOverBudget()) ? { deny: HALT_NOTE(fmtCost(budgetUsd)) } : next(e)))
+
+  // While paused, a typed prompt is held back until the budget is raised; commands still go through.
+  on('prompt.submit', { origin: { kind: ['composer', 'bridge'] } }, async ($, e, next) => {
+    if (e.text.trimStart().startsWith('/')) return next(e)
+    if (!(await isOverBudget($))) return next(e)
+    const spent = await spentNow($)
+    return { drop: fill(tr().pauseDrop, { budget: fmtCost(budgetUsd), cost: `≈${fmtCost(spent)}`, more: fmtCost(raisedFrom(spent) - budgetUsd) }) }
   })
 
   // The budget, set from the prompt: kept in the `budget` setting (/config shows it), in US dollars.
   on('command.run', { command: 'crewdeck-budget' }, async ($, e) => {
     const s = tr()
-    const fill = (text: string, v: Record<string, string>) => text.replace(/\{(\w+)\}/g, (m, k: string) => v[k] ?? m)
     const arg = (e.args ?? '').trim()
-    const spent = (await read($, agents)).reduce((n, a) => n + a.costUsd, 0)
+    const spent = await spentNow($)
     const cost = `≈${fmtCost(spent)}`
     const spentLine = (b: number) => fill(s.budgetSpent, { cost, pct: String(Math.round((spent / b) * 100)) })
-    if (!arg) {
+    if (!arg || (/^(continue|more|\+)$/i.test(arg) && budgetUsd <= 0)) {
       return {
         text: budgetUsd > 0
           ? `${fill(s.budgetIs, { budget: fmtCost(budgetUsd) })} ${spentLine(budgetUsd)} ${s.budgetHow}`
@@ -1540,19 +1710,12 @@ export const register: Register = (on, options) => {
       }
     }
     const off = /^(off|none|clear|no|0+([.,]0+)?)$/i.test(arg)
-    const dollars = off ? 0 : readDollars(arg)
+    // `continue` raises it as the pause's Continue does: half the budget more, from what is spent.
+    const dollars = off ? 0 : /^(continue|more|\+)$/i.test(arg) ? raisedFrom(spent) : readDollars(arg)
     if (dollars === null) return { text: fill(s.budgetBad, { arg }) }
-    budgetUsd = dollars
-    budgetWarned = budgetLevel(spent)
-    $.ui.invalidate('ui.render')
     // Kept as the setting, so the next session has it too; a refusal leaves it for this session.
-    let kept = false
-    try {
-      const row = (await $.config.list()).find(r => /^crewdeck(@[\w.-]+)?\.budget$/.test(r.key))
-      if (row) kept = !(await $.config.set({ key: row.key, value: dollars ? String(dollars) : '' })).deny
-    } catch {
-      kept = false
-    }
+    await applyBudget($, dollars)
+    const kept = await saveBudget($, dollars)
     const local = kept ? '' : ` ${s.budgetLocal}`
     if (!dollars) return { text: `${s.budgetOff}${local}` }
     const level = budgetLevel(spent)
@@ -1655,8 +1818,8 @@ export const register: Register = (on, options) => {
 
     const at = await $.clock.now()
     const id = started.agentId ?? e.tool_use_id
-    // A new crew starts when none of the last one is still running.
-    if (!(await read($, agents)).some(a => a.status === 'running')) crewIds = new Set()
+    // The crew is every agent started since the last summary (several may start at the same moment,
+    // so none of them starts it over: the summary does, when the last of them ends).
     crewIds.add(id)
     crewDone = null
     await update($, agents, list => {
@@ -1714,17 +1877,15 @@ export const register: Register = (on, options) => {
                 (usage.cache_creation_input_tokens || 0) +
                 (usage.output_tokens || 0),
               contextMax: windowOf(model),
-              tokens:
-                a.tokens +
-                (usage.input_tokens || 0) +
-                (usage.output_tokens || 0) +
-                (usage.cache_read_input_tokens || 0) +
-                (usage.cache_creation_input_tokens || 0),
+              // New tokens only: what the request added and what it wrote. Each request reads the
+              // conversation so far again from the cache; counting those reads would count it once a step.
+              tokens: a.tokens + (usage.input_tokens || 0) + (usage.output_tokens || 0) + (usage.cache_creation_input_tokens || 0),
               costUsd: a.costUsd + costOf(model, usage, true),
               steps: a.steps + 1,
             },
       ),
     )
+    await addSpend($, costOf(model, usage, true))
     await checkBudget($)
     return result
   })
@@ -1733,6 +1894,9 @@ export const register: Register = (on, options) => {
     const agentId = e.agentId
     if (agentId) {
       const at = await $.clock.now()
+      // A run whose steps went unseen is priced from the turn's own sum, and that goes on the spend.
+      const run = (await read($, agents)).find(a => a.agentId === agentId)
+      const unseen = run && run.steps === 0 && e.usage ? costOf(e.usage.model || run.model || '', e.usage, false) : 0
       await update($, agents, list =>
         list.map((a): AgentRun => {
           if (a.agentId !== agentId) return a
@@ -1745,17 +1909,14 @@ export const register: Register = (on, options) => {
             ...(fallback && e.usage
               ? {
                   model: e.usage.model || a.model,
-                  tokens:
-                    e.usage.input_tokens +
-                    e.usage.output_tokens +
-                    e.usage.cache_read_input_tokens +
-                    e.usage.cache_creation_input_tokens,
+                  tokens: (e.usage.input_tokens || 0) + (e.usage.output_tokens || 0) + (e.usage.cache_creation_input_tokens || 0),
                   costUsd: costOf(e.usage.model || a.model, e.usage, false),
                 }
               : {}),
           }
         }),
       )
+      await addSpend($, unseen)
       await update($, now, () => at)
       startCrabs($)
       await checkBudget($)
@@ -1786,7 +1947,10 @@ export const register: Register = (on, options) => {
     const running = list.filter(a => a.status === 'running').reverse()
     const finished = list.filter(a => a.status !== 'running').reverse()
     const planned = plannedOf(f, list)
-    const t = totals(list, at)
+    // With a budget, the cost is the session's whole spend, which the budget is held against (a new
+    // plan's list drops finished agents, not what they spent).
+    const rows = totals(list, at)
+    const t = budgetUsd > 0 ? { ...rows, cost: Math.max(rows.cost, await read($, spend)) } : rows
     // The cost, against the budget when one is set: amber near it, red past it.
     const tint = costTint(t.cost)
     const costText = budgetUsd > 0 ? `≈${fmtCost(t.cost)} / ${fmtCost(budgetUsd)}` : `≈${fmtCost(t.cost)}`
@@ -1968,8 +2132,8 @@ export const register: Register = (on, options) => {
           const progress = progressOf(a)
           const fillW = Math.round(barW * (progress ?? ctx / 100))
           const stats = `${s.ctx} ${ctx}% · ${fmtTokens(a.contextTokens)}  ≈${fmtCost(a.costUsd)}  ${fmtTime(elapsed(a, at))}`
-          const steps = a.stepTotal ? `${a.stepDone ?? 0}/${a.stepTotal}${a.stepNote ? ' · ' + a.stepNote : ''}` : ''
-          const cheer = a.status === 'done' && a.endedAt !== undefined && clock - a.endedAt < CHEER_MS
+          const steps = a.stepTotal ? `${a.stepDone ?? 0}/${a.stepTotal}${a.stepNote ? ' · ' + a.stepNote : ''}${isPartial(a) ? ` · ${s.stoppedEarly}` : ''}` : ''
+          const cheer = cheers(a, clock)
           return (
             <Box key={`card-${a.id}`} flexDirection="column">
               <Box flexDirection="row" gap={1} alignItems="flex-start">
@@ -1982,7 +2146,7 @@ export const register: Register = (on, options) => {
                       </Text>
                     </Box>
                     <Box flexGrow={1} />
-                    {pic('mark', 14, 14, statusMark(7, 7, a.status, color), a.status === 'running' ? s.isRunning : s.isFinished)}
+                    {pic('mark', 14, 14, statusMark(7, 7, markOf(a), color), a.status === 'running' ? s.isRunning : isPartial(a) ? s.stoppedEarly : s.isFinished)}
                   </Box>
                   <Text wrap="truncate-end">
                     <Text color={color}>{tier === 'other' ? a.type : tierWord(tier)}</Text>
@@ -2111,13 +2275,14 @@ export const register: Register = (on, options) => {
     const barW = Math.max(6, Math.min(20, textCols - 34))
     // The lines under a card's title are indented past the ▣ when there is no crab to sit beside.
     const indent = Raster ? '' : '  '
+
     const row = (a: AgentRun) => {
       const tier = tierOf(a.type)
       const color = agentColor(a)
       const ctx = ctxOf(a)
       const progress = progressOf(a)
       const model = runModel(a)
-      const steps = a.stepTotal ? `${a.stepDone ?? 0}/${a.stepTotal}${a.stepNote ? ' ' + a.stepNote : ''} · ` : ''
+      const steps = a.stepTotal ? `${a.stepDone ?? 0}/${a.stepTotal}${a.stepNote ? ' ' + a.stepNote : ''}${isPartial(a) ? ` · ${s.stoppedEarly}` : ''} · ` : ''
       const stats = `${steps}${s.ctx} ${ctx}% · ${fmtTokens(a.contextTokens)} ≈${fmtCost(a.costUsd)} ${fmtTime(elapsed(a, at))}`
       // Beside a crab the bar takes what the numbers leave of the text column, so the line is not cut off.
       const bar = Raster ? Math.max(6, Math.min(20, textCols - 1 - [...stats].length)) : barW
@@ -2127,7 +2292,9 @@ export const register: Register = (on, options) => {
           <Text bold wrap="truncate-end">
             {a.description || a.type}
           </Text>
-          <Text color={a.status === 'failed' ? 'red' : a.status === 'done' ? 'green' : color}>{STATUS_GLYPH[a.status]}</Text>
+          <Text color={a.status === 'failed' ? 'red' : isPartial(a) ? NEAR : a.status === 'done' ? 'green' : color} bold={isPartial(a)}>
+            {STATUS_GLYPH[markOf(a)]}
+          </Text>
         </Box>,
         <Text key="model" dimColor wrap="truncate-end">
           {indent}
@@ -2213,7 +2380,7 @@ export const register: Register = (on, options) => {
       <Text key="compact-line" wrap="truncate-end">
         {[...running, ...finished].map(a => (
           <Text key={a.id} color={agentColor(a)}>
-            {STATUS_GLYPH[a.status]}{' '}
+            {STATUS_GLYPH[markOf(a)]}{' '}
           </Text>
         ))}
         {planned.map(pl => (
@@ -2312,8 +2479,11 @@ export const register: Register = (on, options) => {
       </Box>
     ) : null
     const head = isEmpty ? 3 : 2 + (crewText ? 1 : 0)
-    // A little over half: two crab cards fit in a common 46-row sidebar, the tree keeps the rest.
-    const share = Math.max(8, Math.round(bodyRows * 0.55))
+    // A little over half, or more while it takes that for three cards to show at once (the first
+    // three, with their section lines), as long as the tree keeps ten rows of its own.
+    const third = items.findIndex((i, n) => i.card && items.slice(0, n + 1).filter(x => x.card).length === 3)
+    const forThree = (third >= 0 ? items.slice(0, third + 1) : items).reduce((n, i) => n + i.rows, 0) + head + (third >= 0 && third < items.length - 1 ? 1 : 0)
+    const share = Math.max(8, Math.round(bodyRows * 0.55), Math.min(forThree, bodyRows - TREE_MIN_ROWS))
     let shown: RenderElement[] = []
     let used = 0
     if (isEmpty) {
@@ -2409,7 +2579,7 @@ export const register: Register = (on, options) => {
     )
     const percent = `${Math.round(ratio(f) * 100)}%`
     // With a budget the bar takes the cost's color near and past it, and says the cost.
-    const spent = list.reduce((n, a) => n + a.costUsd, 0)
+    const spent = budgetUsd > 0 ? Math.max(list.reduce((n, a) => n + a.costUsd, 0), await read($, spend)) : 0
     const tint = costTint(spent)
     const money = budgetUsd > 0 ? `≈${fmtCost(spent)}/${fmtCost(budgetUsd)}` : ''
     // A reported plan can be dismissed; the agents' own bar goes when they are done.

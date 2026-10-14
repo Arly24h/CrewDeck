@@ -173,6 +173,8 @@ declare module 'claude-code' {
       agents: AgentRun[]
       panel: Panel
       now: number
+      spend: number
+      halt: boolean
       tree: FileTree
       theme: Theme
       activity: Activity[]
