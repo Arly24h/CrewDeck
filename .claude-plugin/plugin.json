@@ -44,6 +44,16 @@
       "description": "US dollars the session's subagents may spend together, e.g. 2 or 0.50 (or set it with /crewdeck-budget 2). Empty: no budget. At 80% the cost and the bar above the prompt turn amber, past it red, and a toast says so once each time.",
       "default": ""
     },
+    "budgetPause": {
+      "type": "string",
+      "title": "Agents: pause at the budget",
+      "description": "on: when the agents reach the budget, the session pauses at its next step and asks you to continue (the budget raised), stop there, or type a new budget; while stopped, typed prompts wait until you raise it with /crewdeck-budget. off: only the warnings.",
+      "options": [
+        "on",
+        "off"
+      ],
+      "default": "on"
+    },
     "notify": {
       "type": "string",
       "title": "Agents: system notifications",

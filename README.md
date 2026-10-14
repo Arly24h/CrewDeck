@@ -1,18 +1,18 @@
 # Crewdeck
 
 <p align="center">
-  <img src="docs/hero.gif" width="984" alt="Crewdeck in the Claude Code CLI: one panel with three subagents on top, each with a pixel crab dressed for its job, and the file tree underneath lighting up the files they read and edit, then the crew view and an agent's card opened from the keyboard">
+  <img src="docs/hero-app.gif" width="984" alt="Crewdeck in the Claude desktop app, recorded live: the chat on the left, and on the right the Crewdeck panel with three subagents at work, each with a pixel crab dressed for its job, the cost against a $20 budget, and the file tree lighting up the files they read">
 </p>
-<p align="center"><sub>The panel, the bar above the prompt and the crabs are drawn from Crewdeck's own output, frame for frame at their real speed; the conversation on the left is illustrative.</sub></p>
+<p align="center"><sub>A screen recording of the Claude desktop app at 16 frames a second, so every crab frame shows twice and they walk at their real speed.</sub></p>
 
 A deck for watching Claude work. Crewdeck is a Claude Code **mod** (built and tested on Claude Code 2.1.296). It adds one panel, **Crewdeck**, in the right sidebar, with two halves you see at the same time, plus a bar above the prompt. **`/crewdeck`** shows or hides the whole panel; `/crewdeck src` opens the tree on a folder.
 
 - **The agents, on top**: every subagent, running, finished or planned, with its model, step progress, context, tokens, cost and time. Each one has a pixel crab dressed for the job it is doing.
 - **The file tree, underneath**: the project with git status, lines changed, branch and ahead/behind, and a shimmer on the files being read, written or committed.
 - **A progress bar above the prompt** while agents run (`Agents · Tasks 1/3`), with a small crab: claws up while they work.
-- **A summary when the crew is done, and a cost budget** that warns you near and past it, both also as a system notification (see [Cost budget and notifications](#cost-budget-and-notifications)).
+- **A summary when the crew is done, and a cost budget** that warns you near it and pauses the session at it until you say go on, both also as a system notification (see [Cost budget and notifications](#cost-budget-and-notifications)).
 
-In the terminal the agents get just over half the panel and the tree the rest. When there are more cards than fit, `▲ N agents` and `▼ N agents` buttons move through them, and the tree keeps its half. Without agents the tree gets nearly the whole panel. The desktop app scrolls the panel as one page.
+In the terminal the agents get just over half the panel and the tree the rest. While agents run they get more of the panel, enough for three cards at once, and the tree keeps at least ten rows. When there are more cards than fit, `▲ N agents` and `▼ N agents` buttons move through them. Without agents the tree gets nearly the whole panel. The desktop app scrolls the panel as one page.
 
 The two halves are connected:
 
@@ -24,9 +24,9 @@ The two halves are connected:
 Both halves work the same in the CLI and in the desktop app's own sessions. Following a CLI session from the app by **Remote Control**, the app shows the conversation and `/crewdeck` and `/crewdeck-budget` work from there (their replies come back), but the app doesn't draw mods' panels yet: the panel stays in the terminal.
 
 <p align="center">
-  <img src="docs/desktop.gif" width="900" alt="Crewdeck in the Claude Code desktop app: the cost, token and time tiles, a card and a crab per agent, then the file tree with outline folders, rounded type chips, the touched card and a file being edited">
+  <img src="docs/agents-panel.gif" width="560" alt="The Crewdeck panel in the Claude desktop app, recorded live: the cost, token and time tiles, a card and a crab per agent, then the touched card and the file tree following the files the agents read">
 </p>
-<p align="center"><sub>Drawn from Crewdeck's own output; the app's frame, buttons and font are approximated, since the app draws those itself.</sub></p>
+<p align="center"><sub>The panel alone, from the same recording.</sub></p>
 
 ## The look
 
@@ -43,13 +43,16 @@ The mod runs where the Claude Code session runs: your terminal, or the desktop a
 
 When the last agent of a crew finishes, a toast and a green line at the top of the panel sum it up: `✓ Crew done · 3 agents · ≈$0.42 · 2:14 · 7 files changed` (and how many failed, if any). The line stays until the next agent starts.
 
-With a **cost budget**, always in US dollars, the panel's cost reads `≈$1.62 / $2.00`. At 80% of it the cost and the bar above the prompt turn amber, past it red, and a toast says so the first time each happens. The budget counts the subagents together and starts over after `/clear`; Claude's own turns are not in it.
+With a **cost budget**, always in US dollars, the panel's cost reads `≈$1.62 / $2.00`. At 80% of it the cost and the bar above the prompt turn amber, past it red, and a toast says so the first time each happens. The budget counts everything the subagents spend in the session, including agents a new plan clears off the list, and starts over after `/clear`; Claude's own turns are not in it.
+
+**At the budget the session pauses.** The next step, Claude's or any agent's, waits while Crewdeck asks you what now: **Continue** (the budget goes up by half, at least $1), **Stop here**, or type a new budget under Other. Nothing is lost while it waits, and agents that reach it together share the one question. If you stop, Claude is told to wrap up, and a prompt you type is held back until you raise the budget (`/crewdeck-budget continue` or `/crewdeck-budget 5`). Turn the pause off with **Agents: pause at the budget** in `/config` to keep only the warnings.
 
 Set it from the prompt, even while agents run:
 
 | Command | What it does |
 | --- | --- |
 | `/crewdeck-budget 2` | a $2.00 budget (`$2`, `2.50`, `2,50` and `2 usd` work too; other currencies are refused) |
+| `/crewdeck-budget continue` | raises it as the pause's Continue does, to carry on past it |
 | `/crewdeck-budget` | shows the budget and how much the agents have spent of it |
 | `/crewdeck-budget off` | no budget |
 
@@ -162,6 +165,7 @@ All in `/config` under crewdeck:
 - **Open the agents panel**: any (when any subagent starts) or off (only with `/crewdeck`).
 - **Agents panel: crab animation**: on (the terminal's crabs walk and do their job) or off (they stand still).
 - **Agents: cost budget (USD)**: US dollars the session's subagents may spend together (`2`, `0.50`); empty for none. Same as `/crewdeck-budget`.
+- **Agents: pause at the budget**: on (at the budget the session waits for you to continue, stop or set a new one) or off (warnings only).
 - **Agents: system notifications**: on (the crew done and the budget also notify through the system) or off (toasts only).
 - **File tree: Claude activity**: what shimmers: reads and writes, writes, reads or none.
 - **File tree: Glyphs**: the terminal's folder icons: auto (a Nerd Font's when there is one), nerd or plain.

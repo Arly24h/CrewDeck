@@ -1291,7 +1291,7 @@ export const register: Register = (on, options) => {
     return { text: `File tree on ${shortPath(root)}${follow ? ' (follows the cwd)' : ''}.` }
   })
 
-  on('tool.call', async ($, e, next) => {
+  on('tool.call', { tool: ['Edit', 'Write', 'NotebookEdit', 'Bash', 'PowerShell'] }, async ($, e, next) => {
     const shell = e.tool === 'Bash' || e.tool === 'PowerShell'
     if (e.tool !== 'Edit' && e.tool !== 'Write' && e.tool !== 'NotebookEdit' && !shell) return next(e)
     const command = e.tool === 'Bash' || e.tool === 'PowerShell' ? e.command : ''

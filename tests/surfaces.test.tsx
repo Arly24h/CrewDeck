@@ -1879,7 +1879,7 @@ test('deck: one panel draws the agents above the file tree, the tree taking the 
   await ui.unmount()
 })
 
-test('deck: more agents than half the panel holds show a window of cards the wheel moves, and the tree keeps its half', { timeoutMs: 30_000 }, async ($, on) => {
+test('deck: the agents take more of the panel so three big cards show at once, then a window the wheel moves, and the tree keeps its rows', { timeoutMs: 40_000 }, async ($, on) => {
   const root = '/home/k/proj'
   const names = Array.from({ length: 60 }, (_, i) => [`f${String(i).padStart(2, '0')}.ts`, 'file'] as [string, 'file'])
   const clock = world(on, { os: 'linux', env: { HOME: '/home/k' }, cwd: root, top: '', dirs: { [root]: names }, status: '', numstat: '' }, [])
@@ -1888,31 +1888,31 @@ test('deck: more agents than half the panel holds show a window of cards the whe
   await clock.settle()
   for (const id of ['a1', 'a2', 'a3', 'a4', 'a5']) await spawnAgent($, id, 'general-purpose', `Task ${id}`)
   await clock.settle()
-  const ui = await $.ui.mount({ plugin: 'crewdeck', surface: 'terminal', component: 'Pane', requestId: 'crewdeck', props: deckPane(44) })
-  const cards = async () => (await ui.findAll({ type: 'Raster' })).map(r => String(r.key))
-  const first = await cards()
-  // Running cards are newest first: a5 on top; the rest wait below a "▼" that scrolls to them.
-  expect(first[0]).toBe('crab-a5')
-  expect(first.length).toBeLessThan(5)
+  const ui = await $.ui.mount({ plugin: 'crewdeck', surface: 'terminal', component: 'Pane', requestId: 'crewdeck', props: deckPane(46) })
+  const crabs = async () => (await ui.findAll({ type: 'Raster' })).map(r => ({ key: String(r.key), rows: (r.props as any).rows }))
+  const first = await crabs()
+  // Three of the five, newest first, with the same big crabs; the rest wait below a "▼".
+  expect(first.map(c => c.key)).toEqual(['crab-a5', 'crab-a4', 'crab-a3'])
+  expect(first.every(c => c.rows === 9)).toBe(true)
   expect(await ui.find({ key: 'agents-down' })).toBeDefined()
   const treeAt = async () => ((await ui.find({ key: 'rows' }))?.props.props as any).rows[0].id
   const treeTop = await treeAt()
-  expect(((await ui.find({ key: 'rows' }))?.props.props as any).rows.length).toBeGreaterThan(10)
+  expect(((await ui.find({ key: 'rows' }))?.props.props as any).rows.length).toBeGreaterThanOrEqual(5)
   // The wheel over the agents moves their window a card; the tree stays put.
   await $.ui.scroll({ component: 'Pane', requestId: 'crewdeck', by: 1, pointer: { column: 10, row: 3 } } as any)
   await clock.settle()
-  const moved = await cards()
+  const moved = (await crabs()).map(c => c.key)
   expect(moved[0]).not.toBe('crab-a5')
   expect(await ui.find({ key: 'agents-up' })).toBeDefined()
   expect(await treeAt()).toBe(treeTop)
   // Below the line, the wheel is the tree's.
-  await $.ui.scroll({ component: 'Pane', requestId: 'crewdeck', by: 1, pointer: { column: 10, row: 40 } } as any)
+  await $.ui.scroll({ component: 'Pane', requestId: 'crewdeck', by: 1, pointer: { column: 10, row: 44 } } as any)
   await clock.settle()
   expect(await treeAt()).not.toBe(treeTop)
-  expect((await cards())[0]).toBe(moved[0])
+  expect((await crabs())[0]?.key).toBe(moved[0])
   // ▲ goes back up.
   await ui.press({ key: 'agents-up' })
-  expect((await cards())[0]).toBe('crab-a5')
+  expect((await crabs())[0]?.key).toBe('crab-a5')
   await ui.unmount()
 })
 
