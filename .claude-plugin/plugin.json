@@ -1,6 +1,6 @@
 {
   "name": "crewdeck",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A deck for watching Claude work: an agents panel with pixel crabs dressed and animated for each agent's job, a progress bar above the prompt, and a file tree that lights up the files each agent reads and writes, with git status. Works with Claude Code's own subagents, no extra commands.",
   "types": "./types/index.d.ts",
   "author": {
@@ -77,7 +77,7 @@
     "activity": {
       "type": "string",
       "title": "File tree: Claude activity",
-      "description": "Which of Claude's file activity shimmers in the tree: files read with the Read tool or Bash readers (rg, grep, find, cat) in purple, writes in orange and git actions in green",
+      "description": "Which of Claude's file activity shimmers in the tree: files read with the Read tool, shell readers (rg, grep, find, cat) or PowerShell readers (Get-Content, Select-String) in purple, writes in orange and git actions in green",
       "default": "reads and writes",
       "options": [
         "reads and writes",

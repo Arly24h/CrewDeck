@@ -2034,3 +2034,26 @@ test('remote control: an app joining the session gets the panel, and a phone dra
   expect((await phone.findAll({ type: 'Input' })).length).toBe(0)
   await phone.unmount()
 })
+
+test('crewdeck: what an agent reads by shell (cat, Get-Content) or by a Grep that shows the lines goes on its card, newest first', { timeoutMs: 20_000 }, async ($, on) => {
+  const root = '/home/k/proj'
+  const w: World = { os: 'linux', env: { HOME: '/home/k' }, cwd: root, top: '', dirs: { [root]: [['a.ts', 'file'], ['b.ts', 'file'], ['c.ts', 'file'], ['d.ts', 'file'], ['sub', 'dir']], [`${root}/sub`]: [] }, status: '', numstat: '' }
+  w.tool = e => (e.tool === 'Grep' ? { result: { mode: e.output_mode, numFiles: 1, filenames: ['d.ts'] } } : undefined)
+  const clock = world(on, w, [])
+  on('agent.spawn', (_$: any, e: any) => ({ model: 'claude-opus-5-5', agentId: String(e.tool_use_id) }))
+  await $.session.start({ cwd: root, surface: 'terminal', isInteractive: true })
+  await clock.settle()
+  await spawnAgent($, 's1', 'general-purpose', 'Scout the code')
+  await $.tool.call({ tool: 'Read', file_path: `${root}/a.ts`, agentId: 's1' } as any)
+  await $.tool.call({ tool: 'Bash', command: 'cat b.ts && ls sub', agentId: 's1' } as any)
+  await clock.settle()
+  await $.tool.call({ tool: 'PowerShell', command: '$t = Get-Content -Path c.ts -TotalCount 40', agentId: 's1' } as any)
+  await clock.settle()
+  // A search that lists names only is no read; one that shows the lines is.
+  await $.tool.call({ tool: 'Grep', pattern: 'x', agentId: 's1' } as any)
+  await $.tool.call({ tool: 'Grep', pattern: 'x', output_mode: 'content', agentId: 's1' } as any)
+  await clock.settle()
+  const card = await $.ui.mount({ plugin: 'crewdeck', surface: 'terminal', component: 'Pane', requestId: 'crewdeck-agents', props: agentPane })
+  expect(await card.find({ type: 'Text', text: /◎ d\.ts, c\.ts \+2$/ })).toBeDefined()
+  await card.unmount()
+})
