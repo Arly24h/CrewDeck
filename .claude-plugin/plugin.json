@@ -1,6 +1,6 @@
 {
   "name": "crewdeck",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A deck for watching Claude work: an agents panel with pixel crabs dressed and animated for each agent's job, a progress bar above the prompt, and a file tree that lights up the files each agent reads and writes, with git status. Works with Claude Code's own subagents, no extra commands.",
   "types": "./types/index.d.ts",
   "author": {
