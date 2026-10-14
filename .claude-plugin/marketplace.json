@@ -1,0 +1,13 @@
+{
+  "name": "crewdeck",
+  "description": "Crewdeck: an agents panel with pixel crabs and a live file tree for Claude Code, in one panel.",
+  "owner": {
+    "name": "Arly24h"
+  },
+  "plugins": [
+    {
+      "name": "crewdeck",
+      "source": "./"
+    }
+  ]
+}

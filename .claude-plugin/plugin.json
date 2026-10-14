@@ -1,0 +1,149 @@
+{
+  "name": "crewdeck",
+  "version": "0.1.0",
+  "description": "A deck for watching Claude work: an agents panel with pixel crabs dressed and animated for each agent's job, a progress bar above the prompt, and a file tree that lights up the files each agent reads and writes, with git status. Works with Claude Code's own subagents, no extra commands.",
+  "types": "./types/index.d.ts",
+  "author": {
+    "name": "Arly24h"
+  },
+  "keywords": [
+    "agents",
+    "subagents",
+    "file-tree",
+    "git",
+    "progress",
+    "mod",
+    "pane"
+  ],
+  "userConfig": {
+    "language": {
+      "type": "string",
+      "title": "Agents panel language",
+      "description": "auto follows Claude Code's language setting, then the system locale; en, ru or he (Hebrew, drawn right to left)",
+      "default": "auto",
+      "options": [
+        "auto",
+        "en",
+        "ru",
+        "he"
+      ]
+    },
+    "autoOpen": {
+      "type": "string",
+      "title": "Open the agents panel",
+      "description": "any: when any subagent starts (Explore, Plan, general-purpose, your own). off: it stays closed until you run /crewdeck.",
+      "default": "any",
+      "options": [
+        "any",
+        "off"
+      ]
+    },
+    "budget": {
+      "type": "string",
+      "title": "Agents: cost budget (USD)",
+      "description": "US dollars the session's subagents may spend together, e.g. 2 or 0.50 (or set it with /crewdeck-budget 2). Empty: no budget. At 80% the cost and the bar above the prompt turn amber, past it red, and a toast says so once each time.",
+      "default": ""
+    },
+    "notify": {
+      "type": "string",
+      "title": "Agents: system notifications",
+      "description": "on: when the crew finishes, and when the cost reaches 80% and 100% of the budget, a notification also comes from the system: on Windows a Windows notification (bottom right, with its sound); elsewhere through the terminal (iTerm2, kitty, Ghostty, or its bell). off: only the toasts inside Claude Code.",
+      "default": "on",
+      "options": [
+        "on",
+        "off"
+      ]
+    },
+    "crabMotion": {
+      "type": "string",
+      "title": "Agents panel: crab animation",
+      "description": "on: in the terminal, a working agent's crab walks and does its job (the coder types, the designer paints...) and a finished one cheers for a moment; the desktop animates them always, unless the system asks for reduced motion. off: the terminal's crabs stand still.",
+      "default": "on",
+      "options": [
+        "on",
+        "off"
+      ]
+    },
+    "activity": {
+      "type": "string",
+      "title": "File tree: Claude activity",
+      "description": "Which of Claude's file activity shimmers in the tree: files read with the Read tool or Bash readers (rg, grep, find, cat) in purple, writes in orange and git actions in green",
+      "default": "reads and writes",
+      "options": [
+        "reads and writes",
+        "writes",
+        "reads",
+        "none"
+      ]
+    },
+    "glyphs": {
+      "type": "string",
+      "title": "File tree: Glyphs",
+      "description": "Folder icons in the terminal: auto uses a Nerd Font's folders when one is installed here (on Windows, when Windows Terminal is set to one), nerd always, plain Unicode only. Files always wear their type badge. The desktop app draws its own icons.",
+      "default": "auto",
+      "options": [
+        "auto",
+        "nerd",
+        "plain"
+      ]
+    },
+    "appRows": {
+      "type": "string",
+      "title": "Desktop app: rows",
+      "description": "pictures: the app's Crewdeck panel draws its rows itself, in the app's font, with outline folder icons, rounded type chips and a shimmering name while a file is read or written. classic: the rows drawn in cells, as in the terminal.",
+      "default": "pictures",
+      "options": [
+        "pictures",
+        "classic"
+      ]
+    },
+    "follow": {
+      "type": "string",
+      "title": "File tree: Follow Claude",
+      "description": "on: the tree scrolls to what Claude reads, writes or commits. off: the view stays where you put it and only your own scrolling moves it; highlights still show.",
+      "default": "on",
+      "options": [
+        "on",
+        "off"
+      ]
+    },
+    "start": {
+      "type": "string",
+      "title": "File tree: Open at start",
+      "description": "on: the pane opens when a session starts. off: it stays closed until you run /crewdeck.",
+      "default": "on",
+      "options": [
+        "on",
+        "off"
+      ]
+    },
+    "column": {
+      "type": "string",
+      "title": "File tree: Right column",
+      "description": "What the right column shows by default: date (last modified), age (time since last modified, short: now, 12m, 3h, 5d, then Oct 9 past a week and the year past a year) or size (files in bytes, folders as disk usage computed in the background). The header button toggles between size and the date or age.",
+      "default": "date",
+      "options": [
+        "date",
+        "age",
+        "size"
+      ]
+    },
+    "hints": {
+      "type": "string",
+      "title": "File tree: Hints",
+      "description": "on: outside a git repo, a line under the header says git status starts after git init. off: the line is hidden and the tree gets the row.",
+      "default": "on",
+      "options": [
+        "on",
+        "off"
+      ]
+    },
+    "open": {
+      "type": "string",
+      "title": "File tree: Open with",
+      "description": "What a double-click or Enter does with a file. Empty: the default app. preview: show it in the pane (left goes back). Anything else is a command run instead: {path} is the file and {dir} its folder; without {path} the path goes last. Words split on spaces, quotes keep a word whole, and no shell runs it. It should start the viewer and return; on Linux it runs detached.",
+      "default": ""
+    }
+  },
+  "license": "MIT"
+}
